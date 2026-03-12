@@ -5,15 +5,27 @@ namespace App\Http\Controllers;
 use App\Models\Client;
 use App\Repositories\ClientRepository;
 use Illuminate\Http\Request;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
-class ClientController extends Controller
+class ClientController extends Controller implements HasMiddleware
 {
     protected $repository;
 
     public function __construct(ClientRepository $repository)
     {
         $this->repository = $repository;
-        $this->authorizeResource(Client::class, 'client');
+    }
+
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('can:viewAny,App\Models\Client', only: ['index']),
+            new Middleware('can:view,client', only: ['show']),
+            new Middleware('can:create,App\Models\Client', only: ['create', 'store']),
+            new Middleware('can:update,client', only: ['edit', 'update']),
+            new Middleware('can:delete,client', only: ['destroy']),
+        ];
     }
 
     public function index()

@@ -9,15 +9,27 @@ use App\Services\InvoiceService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Routing\Controllers\HasMiddleware;
+use Illuminate\Routing\Controllers\Middleware;
 
-class InvoiceController extends Controller
+class InvoiceController extends Controller implements HasMiddleware
 {
     protected $service;
 
     public function __construct(InvoiceService $service)
     {
         $this->service = $service;
-        $this->authorizeResource(Invoice::class, 'invoice');
+    }
+
+    public static function middleware(): array
+    {
+        return [
+            new Middleware('can:viewAny,App\Models\Invoice', only: ['index']),
+            new Middleware('can:view,invoice', only: ['show', 'downloadPdf']),
+            new Middleware('can:create,App\Models\Invoice', only: ['create', 'store']),
+            new Middleware('can:update,invoice', only: ['edit', 'update', 'sendEmail']),
+            new Middleware('can:delete,invoice', only: ['destroy']),
+        ];
     }
 
     public function index()
@@ -63,14 +75,12 @@ class InvoiceController extends Controller
 
     public function downloadPdf(Invoice $invoice)
     {
-        $this->authorize('view', $invoice);
         $pdf = Pdf::loadView('invoices.pdf', compact('invoice'));
         return $pdf->download("invoice-{$invoice->invoice_number}.pdf");
     }
 
     public function sendEmail(Invoice $invoice)
     {
-        $this->authorize('update', $invoice);
         Mail::to($invoice->client->email)->send(new InvoiceSent($invoice));
         
         return back()->with('success', 'Invoice has been sent to the client via email.');

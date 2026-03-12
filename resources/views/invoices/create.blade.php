@@ -1,210 +1,171 @@
-@extends('layouts.app')
-
-@section('header', 'Create New Invoice')
-
-@section('actions')
-    <a href="{{ route('invoices.index') }}" class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition ease-in-out duration-150">
-        Back to List
-    </a>
-@endsection
-
-@section('content')
-<div class="max-w-6xl mx-auto">
-    <form action="{{ route('invoices.store') }}" method="POST" id="invoice-form">
-        @csrf
-        
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- Left Column: Details -->
-            <div class="lg:col-span-2 space-y-8">
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-                    <h3 class="text-lg font-bold text-gray-800 mb-6">Invoice Details</h3>
-                    
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div class="space-y-2">
-                            <label for="invoice_number" class="block text-sm font-semibold text-gray-700">Invoice Number *</label>
-                            <input type="text" name="invoice_number" id="invoice_number" required value="{{ old('invoice_number', $nextNumber) }}"
-                                class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 font-mono">
-                        </div>
-
-                        <div class="space-y-2">
-                            <label for="client_id" class="block text-sm font-semibold text-gray-700">Client *</label>
-                            <select name="client_id" id="client_id" required
-                                class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 appearance-none bg-no-repeat bg-right" style="background-image: url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22292.4%22%20height%3D%22292.4%22%3E%3Cpath%20fill%3D%22%23666%22%20d%3D%22M287%2069.4a17.6%2017.6%200%200%200-13-5.4H18.4c-5%200-9.3%201.8-12.9%205.4A17.6%2017.6%200%200%200%200%2082.2c0%205%201.8%209.3%205.4%2012.9l128%20127.9c3.6%203.6%207.8%205.4%2012.8%205.4s9.2-1.8%2012.8-5.4L287%2095c3.5-3.5%205.4-7.8%205.4-12.8%200-5-1.9-9.2-5.5-12.8z%22%2F%3E%3C%2Fsvg%3E'); background-size: .65em auto; padding-right: 2.5rem;">
-                                <option value="">Select a Client</option>
-                                @foreach($clients as $client)
-                                    <option value="{{ $client->id }}" {{ request('client_id') == $client->id ? 'selected' : '' }}>{{ $client->name }} ({{ $client->company }})</option>
-                                @endforeach
-                            </select>
-                        </div>
-
-                        <div class="space-y-2">
-                            <label for="invoice_date" class="block text-sm font-semibold text-gray-700">Invoice Date *</label>
-                            <input type="date" name="invoice_date" id="invoice_date" required value="{{ old('invoice_date', date('Y-m-d')) }}"
-                                class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500">
-                        </div>
-
-                        <div class="space-y-2">
-                            <label for="due_date" class="block text-sm font-semibold text-gray-700">Due Date *</label>
-                            <input type="date" name="due_date" id="due_date" required value="{{ old('due_date', date('Y-m-d', strtotime('+14 days'))) }}"
-                                class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Line Items Section -->
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
-                    <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-lg font-bold text-gray-800">Line Items</h3>
-                        <button type="button" onclick="addItem()" class="text-sm font-bold text-blue-600 hover:text-blue-800 flex items-center">
-                            <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-                            Add Item
-                        </button>
-                    </div>
-
-                    <div id="items-container" class="space-y-4">
-                        <!-- Items will be injected here -->
-                    </div>
-                    
-                    @if($errors->has('items'))
-                        <p class="text-rose-500 text-sm mt-4 font-bold">{{ $errors->first('items') }}</p>
-                    @endif
-                </div>
-            </div>
-
-            <!-- Right Column: Settings & Summary -->
-            <div class="lg:col-span-1 space-y-8">
-                <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 sticky top-8">
-                    <h3 class="text-lg font-bold text-gray-800 mb-6">Summary</h3>
-                    
-                    <div class="space-y-4">
-                        <div class="space-y-2">
-                            <label for="tax_rate" class="block text-sm font-semibold text-gray-700">Tax Rate (%)</label>
-                            <input type="number" step="0.01" name="tax_rate" id="tax_rate" value="{{ old('tax_rate', 0) }}" onchange="calculateTotals()"
-                                class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
-                        </div>
-
-                        <div class="space-y-2">
-                            <label for="discount_amount" class="block text-sm font-semibold text-gray-700">Discount Amount ($)</label>
-                            <input type="number" step="0.01" name="discount_amount" id="discount_amount" value="{{ old('discount_amount', 0) }}" onchange="calculateTotals()"
-                                class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500">
-                        </div>
-
-                        <div class="pt-4 border-t border-gray-50 space-y-3">
-                            <div class="flex justify-between items-center text-sm">
-                                <span class="text-gray-500 font-medium">Subtotal</span>
-                                <span class="text-gray-900 font-bold" id="subtotal-display">$0.00</span>
-                            </div>
-                            <div class="flex justify-between items-center text-sm">
-                                <span class="text-gray-500 font-medium">Tax</span>
-                                <span class="text-gray-900 font-bold" id="tax-display">$0.00</span>
-                            </div>
-                            <div class="flex justify-between items-center text-lg pt-2 border-t border-gray-100">
-                                <span class="text-gray-900 font-black uppercase tracking-tighter">Total</span>
-                                <span class="text-blue-600 font-black" id="total-display">$0.00</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="mt-8">
-                        <textarea name="notes" id="notes" rows="3"
-                            class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 text-sm"
-                            placeholder="Additional notes or payment instructions...">{{ old('notes') }}</textarea>
-                    </div>
-
-                    <div class="mt-8">
-                        <button type="submit" class="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-blue-100 hover:bg-blue-700 hover:shadow-blue-200 transition-all active:scale-[0.98]">
-                            Create Invoice
-                        </button>
-                    </div>
-                </div>
-            </div>
+<x-app-layout>
+    <x-slot name="header">
+        <div class="flex items-center justify-between">
+            <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+                {{ __('Create New Invoice') }}
+            </h2>
+            <a href="{{ route('invoices.index') }}" class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg font-semibold text-xs text-gray-700 uppercase tracking-widest shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-25 transition ease-in-out duration-150">
+                Back to List
+            </a>
         </div>
-    </form>
-</div>
+    </x-slot>
 
-<template id="item-template">
-    <div class="item-row bg-gray-50 rounded-xl p-6 border border-gray-100 relative group animate-fade-in">
-        <button type="button" onclick="removeItem(this)" class="absolute -top-2 -right-2 w-6 h-6 bg-rose-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 shadow-md transition-all hover:bg-rose-600">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-        </button>
-        <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
-            <div class="md:col-span-6">
-                <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Description</label>
-                <input type="text" name="items[{index}][description]" required
-                    class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 text-sm">
-            </div>
-            <div class="md:col-span-2">
-                <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Qty</label>
-                <input type="number" name="items[{index}][quantity]" required step="1" onchange="calculateTotals()"
-                    class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 text-sm qty-input">
-            </div>
-            <div class="md:col-span-2">
-                <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Price</label>
-                <input type="number" name="items[{index}][unit_price]" required step="0.01" onchange="calculateTotals()"
-                    class="w-full px-3 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 text-sm price-input">
-            </div>
-            <div class="md:col-span-2 flex flex-col justify-end">
-                <label class="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1 text-right">Total</label>
-                <div class="text-sm font-bold text-gray-900 text-right py-2 item-row-total">$0.00</div>
-            </div>
+    <div class="py-12" x-data="invoiceForm()">
+        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
+            <form action="{{ route('invoices.store') }}" method="POST">
+                @csrf
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Left Column: Invoice Details -->
+                    <div class="lg:col-span-2 space-y-8">
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+                            <h3 class="text-lg font-bold text-gray-800 mb-6">Invoice Information</h3>
+                            
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <div class="space-y-2">
+                                    <label class="block text-sm font-semibold text-gray-700">Invoice Number *</label>
+                                    <input type="text" name="invoice_number" required value="{{ old('invoice_number', $nextNumber) }}"
+                                        class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none font-mono font-bold">
+                                    @error('invoice_number') <p class="text-rose-500 text-xs mt-1">{{ $message }}</p> @enderror
+                                </div>
+
+                                <div class="space-y-2">
+                                    <label class="block text-sm font-semibold text-gray-700">Client *</label>
+                                    <select name="client_id" required class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                                        <option value="">Select a client</option>
+                                        @foreach($clients as $client)
+                                            <option value="{{ $client->id }}" {{ old('client_id', request('client_id')) == $client->id ? 'selected' : '' }}>
+                                                {{ $client->name }} ({{ $client->company }})
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                    @error('client_id') <p class="text-rose-500 text-xs mt-1">{{ $message }}</p> @enderror
+                                </div>
+
+                                <div class="space-y-2">
+                                    <label class="block text-sm font-semibold text-gray-700">Invoice Date *</label>
+                                    <input type="date" name="invoice_date" required value="{{ old('invoice_date', date('Y-m-d')) }}"
+                                        class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                                </div>
+
+                                <div class="space-y-2">
+                                    <label class="block text-sm font-semibold text-gray-700">Due Date *</label>
+                                    <input type="date" name="due_date" required value="{{ old('due_date', date('Y-m-d', strtotime('+14 days'))) }}"
+                                        class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none">
+                                </div>
+                            </div>
+
+                            <!-- Dynamic Items -->
+                            <div class="mt-12">
+                                <h3 class="text-sm font-bold text-gray-400 uppercase tracking-widest mb-6">Line Items</h3>
+                                <div class="space-y-4">
+                                    <template x-for="(item, index) in items" :key="index">
+                                        <div class="flex flex-col md:flex-row gap-4 p-4 bg-gray-50 rounded-2xl border border-gray-100 relative group">
+                                            <div class="flex-grow space-y-2">
+                                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Description</label>
+                                                <input type="text" :name="`items[${index}][description]`" x-model="item.description" required
+                                                    class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"
+                                                    placeholder="Service or product description">
+                                            </div>
+                                            <div class="w-full md:w-24 space-y-2">
+                                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Qty</label>
+                                                <input type="number" :name="`items[${index}][quantity]`" x-model="item.quantity" required @input="calculateTotal()"
+                                                    class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-center">
+                                            </div>
+                                            <div class="w-full md:w-32 space-y-2">
+                                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Unit Price</label>
+                                                <input type="number" step="0.01" :name="`items[${index}][unit_price]`" x-model="item.unit_price" required @input="calculateTotal()"
+                                                    class="w-full px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-right">
+                                            </div>
+                                            <div class="w-full md:w-32 space-y-2">
+                                                <label class="text-[10px] font-black text-gray-400 uppercase tracking-tighter">Total</label>
+                                                <div class="w-full px-4 py-2 bg-white rounded-lg border border-gray-100 text-sm font-black text-right text-gray-900" x-text="'$' + (item.quantity * item.unit_price).toFixed(2)">
+                                                </div>
+                                            </div>
+                                            <button type="button" @click="removeItem(index)" class="absolute -right-2 -top-2 w-6 h-6 bg-rose-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-lg">
+                                                <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" /></svg>
+                                            </button>
+                                        </div>
+                                    </template>
+                                </div>
+                                <button type="button" @click="addItem()" class="mt-6 flex items-center text-blue-600 font-bold text-sm hover:underline decoration-blue-200 decoration-2 underline-offset-4">
+                                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                                    Add Another Item
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
+                            <label class="block text-sm font-semibold text-gray-700 mb-2">Notes / Terms</label>
+                            <textarea name="notes" rows="4" class="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-500 outline-none text-sm" placeholder="Thank you for your business!">{{ old('notes') }}</textarea>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Summary & Save -->
+                    <div class="lg:col-span-1 space-y-6">
+                        <div class="bg-slate-900 rounded-2xl shadow-xl shadow-slate-200 p-8 text-white sticky top-24">
+                            <h3 class="text-sm font-bold text-slate-400 uppercase tracking-widest mb-8">Order Summary</h3>
+                            
+                            <div class="space-y-6">
+                                <div class="flex justify-between items-center text-sm">
+                                    <span class="text-slate-400 font-bold">Subtotal</span>
+                                    <span class="font-black text-lg" x-text="'$' + subtotal.toFixed(2)"></span>
+                                </div>
+                                
+                                <div class="space-y-2">
+                                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tax Rate (%)</label>
+                                    <input type="number" name="tax_rate" x-model="taxRate" @input="calculateTotal()"
+                                        class="w-full bg-slate-800 border-none rounded-xl px-4 py-2 text-white font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+
+                                <div class="space-y-2">
+                                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Discount Amount ($)</label>
+                                    <input type="number" step="0.01" name="discount_amount" x-model="discountAmount" @input="calculateTotal()"
+                                        class="w-full bg-slate-800 border-none rounded-xl px-4 py-2 text-white font-bold outline-none focus:ring-2 focus:ring-blue-500">
+                                </div>
+
+                                <div class="pt-6 border-t border-slate-800 flex justify-between items-center">
+                                    <span class="text-sm font-black uppercase tracking-widest text-blue-400">Total</span>
+                                    <span class="text-3xl font-black tracking-tighter" x-text="'$' + total.toFixed(2)"></span>
+                                </div>
+
+                                <button type="submit" class="w-full py-4 bg-blue-600 hover:bg-blue-700 rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg shadow-blue-500/20 transition-all transform active:scale-95">
+                                    Create Invoice
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
         </div>
     </div>
-</template>
 
-<script>
-    let itemIndex = 0;
-    const container = document.getElementById('items-container');
-    const template = document.getElementById('item-template').innerHTML;
-
-    function addItem() {
-        const entry = template.replace(/{index}/g, itemIndex++);
-        const div = document.createElement('div');
-        div.innerHTML = entry;
-        container.appendChild(div.firstElementChild);
-        calculateTotals();
-    }
-
-    function removeItem(btn) {
-        btn.closest('.item-row').remove();
-        calculateTotals();
-    }
-
-    function calculateTotals() {
-        let subtotal = 0;
-        const rows = document.querySelectorAll('.item-row');
-        
-        rows.forEach(row => {
-            const qty = parseFloat(row.querySelector('.qty-input').value) || 0;
-            const price = parseFloat(row.querySelector('.price-input').value) || 0;
-            const rowTotal = qty * price;
-            subtotal += rowTotal;
-            row.querySelector('.item-row-total').innerText = '$' + rowTotal.toFixed(2);
-        });
-
-        const taxRate = parseFloat(document.getElementById('tax_rate').value) || 0;
-        const discount = parseFloat(document.getElementById('discount_amount').value) || 0;
-        
-        const taxAmount = (subtotal * (taxRate / 100));
-        const total = (subtotal + taxAmount) - discount;
-
-        document.getElementById('subtotal-display').innerText = '$' + subtotal.toFixed(2);
-        document.getElementById('tax-display').innerText = '$' + taxAmount.toFixed(2);
-        document.getElementById('total-display').innerText = '$' + total.toFixed(2);
-    }
-
-    // Initialize with one item
-    document.addEventListener('DOMContentLoaded', () => {
-        addItem();
-    });
-</script>
-
-<style>
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .animate-fade-in {
-        animation: fadeIn 0.3s ease-out forwards;
-    }
-</style>
-@endsection
+    <script>
+        function invoiceForm() {
+            return {
+                items: [{ description: '', quantity: 1, unit_price: 0 }],
+                taxRate: 0,
+                discountAmount: 0,
+                subtotal: 0,
+                total: 0,
+                
+                addItem() {
+                    this.items.push({ description: '', quantity: 1, unit_price: 0 });
+                },
+                
+                removeItem(index) {
+                    if (this.items.length > 1) {
+                        this.items.splice(index, 1);
+                        this.calculateTotal();
+                    }
+                },
+                
+                calculateTotal() {
+                    this.subtotal = this.items.reduce((sum, item) => sum + (item.quantity * item.unit_price), 0);
+                    let tax = (this.subtotal * (this.taxRate / 100));
+                    this.total = this.subtotal + tax - parseFloat(this.discountAmount || 0);
+                }
+            }
+        }
+    </script>
+</x-app-layout>
